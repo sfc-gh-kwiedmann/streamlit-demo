@@ -36,6 +36,7 @@ jobs:
             --temporary-connection \
             --account ${{ secrets.SNOWFLAKE_ACCOUNT }} \
             --user ${{ secrets.SNOWFLAKE_USER }} \
+            --authenticator SNOWFLAKE_JWT \
             --private-key-file /tmp/rsa_key.p8 \
             --database $SF_DATABASE \
             --schema PUBLIC \
@@ -48,6 +49,7 @@ jobs:
             --temporary-connection \
             --account ${{ secrets.SNOWFLAKE_ACCOUNT }} \
             --user ${{ secrets.SNOWFLAKE_USER }} \
+            --authenticator SNOWFLAKE_JWT \
             --private-key-file /tmp/rsa_key.p8 \
             --database $SF_DATABASE \
             --schema PUBLIC \
