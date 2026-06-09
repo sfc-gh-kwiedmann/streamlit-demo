@@ -1,0 +1,58 @@
+name: Deploy Streamlit App
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Snow CLI
+        run: pip install snowflake-cli
+
+      - name: Write private key file
+        run: echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
+
+      - name: Set environment variables based on branch
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "SF_DATABASE=STREAMLIT_PROD" >> $GITHUB_ENV
+            echo "SF_ENV=PROD" >> $GITHUB_ENV
+          else
+            echo "SF_DATABASE=STREAMLIT_DEV" >> $GITHUB_ENV
+            echo "SF_ENV=DEV" >> $GITHUB_ENV
+          fi
+
+      - name: Deploy Streamlit app
+        run: |
+          snow streamlit deploy --replace \
+            --temporary-connection \
+            --account ${{ secrets.SNOWFLAKE_ACCOUNT }} \
+            --user ${{ secrets.SNOWFLAKE_USER }} \
+            --authenticator SNOWFLAKE_JWT \
+            --private-key-file /tmp/rsa_key.p8 \
+            --database $SF_DATABASE \
+            --schema PUBLIC \
+            --warehouse COMPUTE_WH \
+            --role STREAMLIT_DEPLOYER
+
+      - name: Verify deployment
+        run: |
+          snow sql \
+            --temporary-connection \
+            --account ${{ secrets.SNOWFLAKE_ACCOUNT }} \
+            --user ${{ secrets.SNOWFLAKE_USER }} \
+            --authenticator SNOWFLAKE_JWT \
+            --private-key-file /tmp/rsa_key.p8 \
+            --database $SF_DATABASE \
+            --schema PUBLIC \
+            --warehouse COMPUTE_WH \
+            --role STREAMLIT_DEPLOYER \
+            -q "SHOW STREAMLITS LIKE 'STREAMLIT_CI_CD_DEMO' IN DATABASE $SF_DATABASE"

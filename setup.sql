@@ -1,0 +1,64 @@
+-- ============================================================
+-- STREAMLIT CI/CD DEMO - SETUP SCRIPT
+-- Run this in Snowsight before the demo to prepare the environment.
+-- Prerequisites: GitHub repo secrets already configured
+--   SNOWFLAKE_ACCOUNT, SNOWFLAKE_USER, SNOWFLAKE_PRIVATE_KEY
+-- ============================================================
+
+-- TEARDOWN (run this section to reset between demos)
+GRANT ROLE STREAMLIT_DEPLOYER TO ROLE ACCOUNTADMIN;
+USE ROLE STREAMLIT_DEPLOYER;
+DROP STREAMLIT IF EXISTS STREAMLIT_DEV.PUBLIC.STREAMLIT_CI_CD_DEMO;
+DROP STREAMLIT IF EXISTS STREAMLIT_PROD.PUBLIC.STREAMLIT_CI_CD_DEMO;
+USE ROLE ACCOUNTADMIN;
+
+-- 1. Create DEV and PROD databases
+CREATE DATABASE IF NOT EXISTS STREAMLIT_DEV COMMENT = 'Dev environment for Streamlit CI/CD demo';
+CREATE DATABASE IF NOT EXISTS STREAMLIT_PROD COMMENT = 'Prod environment for Streamlit CI/CD demo';
+
+-- 2. Create a least-privilege deployer role
+CREATE ROLE IF NOT EXISTS STREAMLIT_DEPLOYER COMMENT = 'Role for CI/CD Streamlit deployments';
+GRANT ROLE STREAMLIT_DEPLOYER TO ROLE ACCOUNTADMIN;
+
+-- 3. Grant minimal permissions on DEV
+GRANT USAGE ON DATABASE STREAMLIT_DEV TO ROLE STREAMLIT_DEPLOYER;
+GRANT USAGE ON SCHEMA STREAMLIT_DEV.PUBLIC TO ROLE STREAMLIT_DEPLOYER;
+GRANT CREATE STREAMLIT ON SCHEMA STREAMLIT_DEV.PUBLIC TO ROLE STREAMLIT_DEPLOYER;
+GRANT CREATE STAGE ON SCHEMA STREAMLIT_DEV.PUBLIC TO ROLE STREAMLIT_DEPLOYER;
+
+-- 4. Grant minimal permissions on PROD
+GRANT USAGE ON DATABASE STREAMLIT_PROD TO ROLE STREAMLIT_DEPLOYER;
+GRANT USAGE ON SCHEMA STREAMLIT_PROD.PUBLIC TO ROLE STREAMLIT_DEPLOYER;
+GRANT CREATE STREAMLIT ON SCHEMA STREAMLIT_PROD.PUBLIC TO ROLE STREAMLIT_DEPLOYER;
+GRANT CREATE STAGE ON SCHEMA STREAMLIT_PROD.PUBLIC TO ROLE STREAMLIT_DEPLOYER;
+
+-- 5. Grant warehouse usage
+GRANT USAGE ON WAREHOUSE COMPUTE_WH TO ROLE STREAMLIT_DEPLOYER;
+
+-- 6. Create a service user for GitHub Actions (key-pair auth)
+CREATE USER IF NOT EXISTS SVC_GITHUB_DEPLOY
+  TYPE = SERVICE
+  RSA_PUBLIC_KEY = '<PASTE_YOUR_PUBLIC_KEY_HERE>'
+  COMMENT = 'Service user for GitHub Actions Streamlit deployment';
+
+-- 7. Assign the deployer role
+GRANT ROLE STREAMLIT_DEPLOYER TO USER SVC_GITHUB_DEPLOY;
+ALTER USER SVC_GITHUB_DEPLOY SET DEFAULT_ROLE = STREAMLIT_DEPLOYER;
+
+-- 8. Network policy to allow GitHub Actions runners
+--    (In production, restrict to GitHub's published IP ranges)
+CREATE NETWORK POLICY IF NOT EXISTS GITHUB_ACTIONS_POLICY
+  ALLOWED_IP_LIST = ('0.0.0.0/0')
+  COMMENT = 'Allows GitHub Actions runners to connect (demo only)';
+ALTER USER SVC_GITHUB_DEPLOY SET NETWORK_POLICY = GITHUB_ACTIONS_POLICY;
+
+-- 9. Auto-grant visibility so ACCOUNTADMIN can see deployed apps in Snowsight
+GRANT ALL PRIVILEGES ON FUTURE STREAMLITS IN SCHEMA STREAMLIT_DEV.PUBLIC TO ROLE ACCOUNTADMIN;
+GRANT ALL PRIVILEGES ON FUTURE STREAMLITS IN SCHEMA STREAMLIT_PROD.PUBLIC TO ROLE ACCOUNTADMIN;
+
+-- ============================================================
+-- DONE! Your environment is ready for the demo.
+-- Next steps:
+--   1. Push files to the develop branch → deploys to STREAMLIT_DEV
+--   2. Merge develop into main → promotes to STREAMLIT_PROD
+-- ============================================================
